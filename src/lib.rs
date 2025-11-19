@@ -1,5 +1,6 @@
 use swmr_epoch::{EpochGcDomain, EpochPtr, GcHandle, LocalEpoch, PinGuard};
-use std::sync::{Arc, Mutex, MutexGuard};
+use antidote::{Mutex, MutexGuard};
+use std::sync::Arc;
 use std::ops::{Deref, DerefMut};
 use std::mem::ManuallyDrop;
 use std::fmt;
@@ -41,7 +42,7 @@ impl<T: 'static> LfrLock<T> {
     /// 更新数据 - 直接替换
     #[inline]
     pub fn update(&self, new_t: T) {
-        let mut gc = self.inner.gc.lock().unwrap();
+        let mut gc = self.inner.gc.lock();
         self.inner.data.store(new_t, &mut *gc);
         gc.collect();
     }
@@ -53,7 +54,7 @@ impl<T: 'static> LfrLock<T> {
         F: FnMut(&T) -> T,
     {
         // 获取 Mutex 锁，确保同一时间只有一个写者在写入
-        let mut gc = self.inner.gc.lock().unwrap();
+        let mut gc = self.inner.gc.lock();
         
         // 1. 读取旧数据并执行更新逻辑
         let old_t = self.inner.data.load(guard);
@@ -153,7 +154,7 @@ impl<'a, T: 'static + Clone> WriteGuard<'a, T> {
     #[inline]
     fn new(lock: &'a LfrLock<T>, guard: &'a PinGuard) -> Self {
         // 获取 Mutex 锁
-        let gc_guard = lock.inner.gc.lock().unwrap();
+        let gc_guard = lock.inner.gc.lock();
 
         let old_t = lock.inner.data.load(guard);
         let data = old_t.clone();
