@@ -16,6 +16,7 @@ pub struct LfrLock<T> {
 
 impl<T: 'static> LfrLock<T> {
     /// 创建新的 LfrLock
+    #[inline]
     pub fn new(initial: T) -> Self {
         let (gc, domain) = EpochGcDomain::builder()
             .auto_reclaim_threshold(None)
@@ -31,26 +32,31 @@ impl<T: 'static> LfrLock<T> {
         }
     }
 
+    /// 更新数据 - 直接替换
+    #[inline]
+    pub fn update(&self, new_t: T) {
+        let mut gc = self.gc.lock().unwrap();
+        self.data.store(new_t, &mut *gc);
+        gc.collect();
+    }
+
     /// 写入操作（闭包方式）
-    pub fn write_with<F>(&self, mut updater: F)
+    #[inline]
+    pub fn write_with<F>(&self, mut updater: F, guard: &PinGuard)
     where
         F: FnMut(&T) -> T,
     {
         // 获取 Mutex 锁，确保同一时间只有一个写者在写入
         let mut gc = self.gc.lock().unwrap();
         
-        // 1. 作为读者注册，用于读取旧数据
-        let local_epoch = self.domain.register_reader();
-        let guard = local_epoch.pin();
-
-        // 2. 读取旧数据并执行更新逻辑
-        let old_t = self.data.load(&guard);
+        // 1. 读取旧数据并执行更新逻辑
+        let old_t = self.data.load(guard);
         let new_t = updater(old_t);
 
-        // 3. 换入新的 "T" 状态
+        // 2. 换入新的 "T" 状态
         self.data.store(new_t, &mut *gc);
 
-        // 4. 执行垃圾回收
+        // 3. 执行垃圾回收
         gc.collect();
     }
 
@@ -58,24 +64,23 @@ impl<T: 'static> LfrLock<T> {
     /// 
     /// 返回 WriteGuard，允许直接修改数据，在 drop 时自动提交。
     /// 获取 Mutex 锁，确保串行化写入。
-    pub fn write(&self) -> WriteGuard<'_, T>
+    #[inline]
+    pub fn write<'g>(&'g self, guard: &'g PinGuard) -> WriteGuard<'g, T>
     where
         T: Clone,
     {
-        WriteGuard::new(self)
+        WriteGuard::new(self, guard)
     }
 
     /// 尝试获取写入锁
-    pub fn try_write(&self) -> Option<WriteGuard<'_, T>>
+    #[inline]
+    pub fn try_write<'g>(&'g self, guard: &'g PinGuard) -> Option<WriteGuard<'g, T>>
     where
         T: Clone,
     {
         let gc_guard = self.gc.try_lock().ok()?;
         
-        let local_epoch = self.domain.register_reader();
-        let guard = local_epoch.pin();
-        
-        let old_t = self.data.load(&guard);
+        let old_t = self.data.load(guard);
         let data = old_t.clone();
         
         Some(WriteGuard {
@@ -86,6 +91,7 @@ impl<T: 'static> LfrLock<T> {
     }
 
     /// 注册读者，获取 LocalEpoch
+    #[inline]
     pub fn register(&self) -> LocalEpoch {
         self.domain.register_reader()
     }
@@ -93,10 +99,8 @@ impl<T: 'static> LfrLock<T> {
     /// 读取数据 - 永不阻塞
     ///
     /// PinGuard 必须传入，以确保内存安全。
-    pub fn read<'g>(&self, guard: &'g PinGuard) -> &'g T
-    where
-        T: 'g,
-    {
+    #[inline]
+    pub fn read<'g>(&self, guard: &'g PinGuard) -> &'g T {
         // 使用 EpochPtr 加载当前状态
         // PinGuard 确保内存安全
         self.data.load(guard)
@@ -104,12 +108,14 @@ impl<T: 'static> LfrLock<T> {
 }
 
 impl<T: Default + 'static> Default for LfrLock<T> {
+    #[inline]
     fn default() -> Self {
         Self::new(T::default())
     }
 }
 
 impl<T: fmt::Debug + 'static> fmt::Debug for LfrLock<T> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let local_epoch = self.register();
         let guard = local_epoch.pin();
@@ -121,6 +127,7 @@ impl<T: fmt::Debug + 'static> fmt::Debug for LfrLock<T> {
 }
 
 impl<T> Clone for LfrLock<T> {
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             data: self.data.clone(),
@@ -139,15 +146,12 @@ pub struct WriteGuard<'a, T: 'static> {
 }
 
 impl<'a, T: 'static + Clone> WriteGuard<'a, T> {
-    fn new(lock: &'a LfrLock<T>) -> Self {
+    #[inline]
+    fn new(lock: &'a LfrLock<T>, guard: &'a PinGuard) -> Self {
         // 获取 Mutex 锁
         let gc_guard = lock.gc.lock().unwrap();
 
-        // 注册为读者并读取当前数据
-        let local_epoch = lock.domain.register_reader();
-        let guard = local_epoch.pin();
-        
-        let old_t = lock.data.load(&guard);
+        let old_t = lock.data.load(guard);
         let data = old_t.clone();
         
         WriteGuard {
@@ -161,18 +165,21 @@ impl<'a, T: 'static + Clone> WriteGuard<'a, T> {
 impl<'a, T: 'static> Deref for WriteGuard<'a, T> {
     type Target = T;
     
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
 impl<'a, T: 'static> DerefMut for WriteGuard<'a, T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
 }
 
 impl<'a, T: 'static> Drop for WriteGuard<'a, T> {
+    #[inline]
     fn drop(&mut self) {
         // 从 ManuallyDrop 中取出数据
         // 安全性：self.data 在这里被消费，之后 WriteGuard 销毁时不会再次 drop data
@@ -206,9 +213,11 @@ mod tests {
 
         // 测试写入操作（闭包方式）
         for i in 1..=10 {
+            let local_epoch = lock.register();
+            let guard = local_epoch.pin();
             lock.write_with(|old_data| Data {
                 value: old_data.value + 1,
-            });
+            }, &guard);
 
             // 在每次写入后验证值
             let local_epoch = lock.register();
@@ -231,8 +240,10 @@ mod tests {
         // 使用 WriteGuard 进行写入
         for i in 1..=10 {
             {
-                let mut guard = lock.write();
-                guard.value += 1;  // 直接修改，无需闭包
+                let local_epoch = lock.register();
+                let guard = local_epoch.pin();
+                let mut write_guard = lock.write(&guard);
+                write_guard.value += 1;  // 直接修改，无需闭包
             }  // guard drop，自动提交
 
             // 在每次写入后验证值
@@ -260,9 +271,11 @@ mod tests {
             let lock_clone = lock.clone();
             let handle = thread::spawn(move || {
                 for _ in 0..25 {
+                    let local_epoch = lock_clone.register();
+                    let guard = local_epoch.pin();
                     lock_clone.write_with(|old_data| Data {
                         value: old_data.value + 1,
-                    });
+                    }, &guard);
                 }
             });
             handles.push(handle);
@@ -291,9 +304,11 @@ mod tests {
             let lock_clone = lock.clone();
             let handle = thread::spawn(move || {
                 for _ in 0..50 {
+                    let local_epoch = lock_clone.register();
+                    let guard = local_epoch.pin();
                     lock_clone.write_with(|old_data| Data {
                         value: old_data.value + 1,
-                    });
+                    }, &guard);
                 }
             });
             handles.push(handle);
@@ -334,13 +349,17 @@ mod tests {
         let lock2 = lock.clone();
         
         // 两个锁实例都可以写入
+        let local_epoch = lock.register();
+        let guard = local_epoch.pin();
         lock.write_with(|old_data| Data {
             value: old_data.value + 10,
-        });
+        }, &guard);
         
+        let local_epoch2 = lock2.register();
+        let guard2 = local_epoch2.pin();
         lock2.write_with(|old_data| Data {
             value: old_data.value + 5,
-        });
+        }, &guard2);
         
         // 验证最终值
         let local_epoch = lock.register();
@@ -369,7 +388,9 @@ mod tests {
         assert_eq!(data2.value, 42);
         
         // 使用 lock 进行写入
-        lock.write_with(|_| Data { value: 100 });
+        let local_epoch = lock.register();
+        let guard = local_epoch.pin();
+        lock.write_with(|_| Data { value: 100 }, &guard);
         
         // 两个锁实例应该都能看到新值
         let local_epoch1 = lock.register();
