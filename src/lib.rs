@@ -9,8 +9,12 @@ use std::fmt;
 /// 类似于 `std::sync::Mutex`，统一的类型同时支持读写操作。
 /// 核心特性：读取操作无锁且永不阻塞；写入操作涉及复制旧数据、修改、然后原子替换。
 pub struct LfrLock<T> {
-    data: Arc<EpochPtr<T>>,
-    gc: Arc<Mutex<GcHandle>>,
+    inner: Arc<LfrLockInner<T>>,
+}
+
+struct LfrLockInner<T> {
+    data: EpochPtr<T>,
+    gc: Mutex<GcHandle>,
     domain: EpochGcDomain,
 }
 
@@ -23,20 +27,22 @@ impl<T: 'static> LfrLock<T> {
             .cleanup_interval(2)
             .build();
         
-        let data = Arc::new(EpochPtr::new(initial));
+        let data = EpochPtr::new(initial);
         
         LfrLock {
-            data,
-            gc: Arc::new(Mutex::new(gc)),
-            domain,
+            inner: Arc::new(LfrLockInner {
+                data,
+                gc: Mutex::new(gc),
+                domain,
+            }),
         }
     }
 
     /// 更新数据 - 直接替换
     #[inline]
     pub fn update(&self, new_t: T) {
-        let mut gc = self.gc.lock().unwrap();
-        self.data.store(new_t, &mut *gc);
+        let mut gc = self.inner.gc.lock().unwrap();
+        self.inner.data.store(new_t, &mut *gc);
         gc.collect();
     }
 
@@ -47,14 +53,14 @@ impl<T: 'static> LfrLock<T> {
         F: FnMut(&T) -> T,
     {
         // 获取 Mutex 锁，确保同一时间只有一个写者在写入
-        let mut gc = self.gc.lock().unwrap();
+        let mut gc = self.inner.gc.lock().unwrap();
         
         // 1. 读取旧数据并执行更新逻辑
-        let old_t = self.data.load(guard);
+        let old_t = self.inner.data.load(guard);
         let new_t = updater(old_t);
 
         // 2. 换入新的 "T" 状态
-        self.data.store(new_t, &mut *gc);
+        self.inner.data.store(new_t, &mut *gc);
 
         // 3. 执行垃圾回收
         gc.collect();
@@ -78,9 +84,9 @@ impl<T: 'static> LfrLock<T> {
     where
         T: Clone,
     {
-        let gc_guard = self.gc.try_lock().ok()?;
+        let gc_guard = self.inner.gc.try_lock().ok()?;
         
-        let old_t = self.data.load(guard);
+        let old_t = self.inner.data.load(guard);
         let data = old_t.clone();
         
         Some(WriteGuard {
@@ -93,7 +99,7 @@ impl<T: 'static> LfrLock<T> {
     /// 注册读者，获取 LocalEpoch
     #[inline]
     pub fn register(&self) -> LocalEpoch {
-        self.domain.register_reader()
+        self.inner.domain.register_reader()
     }
 
     /// 读取数据 - 永不阻塞
@@ -103,7 +109,7 @@ impl<T: 'static> LfrLock<T> {
     pub fn read<'g>(&self, guard: &'g PinGuard) -> &'g T {
         // 使用 EpochPtr 加载当前状态
         // PinGuard 确保内存安全
-        self.data.load(guard)
+        self.inner.data.load(guard)
     }
 }
 
@@ -130,9 +136,7 @@ impl<T> Clone for LfrLock<T> {
     #[inline]
     fn clone(&self) -> Self {
         Self {
-            data: self.data.clone(),
-            gc: self.gc.clone(),
-            domain: self.domain.clone(),
+            inner: self.inner.clone(),
         }
     }
 }
@@ -149,9 +153,9 @@ impl<'a, T: 'static + Clone> WriteGuard<'a, T> {
     #[inline]
     fn new(lock: &'a LfrLock<T>, guard: &'a PinGuard) -> Self {
         // 获取 Mutex 锁
-        let gc_guard = lock.gc.lock().unwrap();
+        let gc_guard = lock.inner.gc.lock().unwrap();
 
-        let old_t = lock.data.load(guard);
+        let old_t = lock.inner.data.load(guard);
         let data = old_t.clone();
         
         WriteGuard {
@@ -186,7 +190,7 @@ impl<'a, T: 'static> Drop for WriteGuard<'a, T> {
         let new_data = unsafe { ManuallyDrop::take(&mut self.data) };
         
         // 执行状态切换
-        self.lock.data.store(new_data, &mut *self.gc_guard);
+        self.lock.inner.data.store(new_data, &mut *self.gc_guard);
         self.gc_guard.collect();
     }
 }

@@ -11,7 +11,7 @@ struct Data(Vec<u32>);
 fn read_only_single_thread(c: &mut Criterion) {
     let mut group = c.benchmark_group("read_only_single_thread");
     
-    let lock = LfrLock::new(Data(vec![0; 1000]));
+    let lock = LfrLock::new(Data(vec![0; 10]));
     group.bench_function("LfrLock", |b| {
         b.iter(|| {
             let local_epoch = lock.register();
@@ -20,14 +20,14 @@ fn read_only_single_thread(c: &mut Criterion) {
         })
     });
 
-    let lock = ArcSwap::from_pointee(Data(vec![0; 1000]));
+    let lock = ArcSwap::from_pointee(Data(vec![0; 10]));
     group.bench_function("ArcSwap", |b| {
         b.iter(|| {
             let _ = lock.load().0[0];
         })
     });
 
-    let lock = Mutex::new(Data(vec![0; 1000]));
+    let lock = Mutex::new(Data(vec![0; 10]));
     group.bench_function("Mutex", |b| {
         b.iter(|| {
             let _ = lock.lock().unwrap().0[0];
@@ -46,12 +46,12 @@ fn read_heavy_concurrent(c: &mut Criterion) {
     
     let num_readers = 4;
     let ops_per_thread = 10_000; 
-    // 1 writer doing 1/100th of operations implies very read heavy
+    // 1 writer doing 1/10th of operations implies very read heavy
 
     // LfrLock
     group.bench_function("LfrLock", |b| {
         b.iter(|| {
-            let lock = LfrLock::new(Data(vec![0; 1000]));
+            let lock = LfrLock::new(Data(vec![0; 10]));
             let mut handles = vec![];
             
             // Readers
@@ -69,8 +69,8 @@ fn read_heavy_concurrent(c: &mut Criterion) {
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                for _ in 0..(ops_per_thread/100) { 
-                     lock_w.update(Data(vec![0; 1000]));
+                for _ in 0..(ops_per_thread/10) { 
+                     lock_w.update(Data(vec![0; 10]));
                 }
             }));
 
@@ -81,7 +81,7 @@ fn read_heavy_concurrent(c: &mut Criterion) {
     // ArcSwap
     group.bench_function("ArcSwap", |b| {
         b.iter(|| {
-            let lock = Arc::new(ArcSwap::from_pointee(Data(vec![0; 1000])));
+            let lock = Arc::new(ArcSwap::from_pointee(Data(vec![0; 10])));
             let mut handles = vec![];
 
             // Readers
@@ -97,8 +97,8 @@ fn read_heavy_concurrent(c: &mut Criterion) {
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                 for _ in 0..(ops_per_thread/100) {
-                     lock_w.store(Arc::new(Data(vec![0; 1000])));
+                 for _ in 0..(ops_per_thread/10) {
+                     lock_w.store(Arc::new(Data(vec![0; 10])));
                  }
             }));
 
@@ -109,7 +109,7 @@ fn read_heavy_concurrent(c: &mut Criterion) {
     // Mutex
     group.bench_function("Mutex", |b| {
         b.iter(|| {
-            let lock = Arc::new(Mutex::new(Data(vec![0; 1000])));
+            let lock = Arc::new(Mutex::new(Data(vec![0; 10])));
             let mut handles = vec![];
 
             // Readers
@@ -125,8 +125,8 @@ fn read_heavy_concurrent(c: &mut Criterion) {
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                 for _ in 0..(ops_per_thread/100) {
-                     *lock_w.lock().unwrap() = Data(vec![0; 1000]);
+                 for _ in 0..(ops_per_thread/10) {
+                     *lock_w.lock().unwrap() = Data(vec![0; 10]);
                  }
             }));
 
@@ -148,7 +148,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
     // LfrLock
     group.bench_function("LfrLock", |b| {
         b.iter(|| {
-            let lock = LfrLock::new(Data(vec![0; 1000]));
+            let lock = LfrLock::new(Data(vec![0; 10]));
             let mut handles = vec![];
             
             for _ in 0..num_pairs {
@@ -166,7 +166,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                 let lock_w = lock.clone();
                 handles.push(thread::spawn(move || {
                     for _ in 0..ops_per_thread {
-                        lock_w.update(Data(vec![0; 1000]));
+                        lock_w.update(Data(vec![0; 10]));
                     }
                 }));
             }
@@ -177,7 +177,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
     // ArcSwap
     group.bench_function("ArcSwap", |b| {
          b.iter(|| {
-            let lock = Arc::new(ArcSwap::from_pointee(Data(vec![0; 1000])));
+            let lock = Arc::new(ArcSwap::from_pointee(Data(vec![0; 10])));
             let mut handles = vec![];
             
             for _ in 0..num_pairs {
@@ -193,7 +193,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                 let lock_w = lock.clone();
                 handles.push(thread::spawn(move || {
                     for _ in 0..ops_per_thread {
-                        lock_w.store(Arc::new(Data(vec![0; 1000])));
+                        lock_w.store(Arc::new(Data(vec![0; 10])));
                     }
                 }));
             }
@@ -204,7 +204,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
     // Mutex
     group.bench_function("Mutex", |b| {
         b.iter(|| {
-            let lock = Arc::new(Mutex::new(Data(vec![0; 1000])));
+            let lock = Arc::new(Mutex::new(Data(vec![0; 10])));
             let mut handles = vec![];
             
             for _ in 0..num_pairs {
@@ -220,7 +220,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                 let lock_w = lock.clone();
                 handles.push(thread::spawn(move || {
                     for _ in 0..ops_per_thread {
-                        *lock_w.lock().unwrap() = Data(vec![0; 1000]);
+                        *lock_w.lock().unwrap() = Data(vec![0; 10]);
                     }
                 }));
             }
