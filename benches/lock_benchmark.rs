@@ -46,7 +46,7 @@ fn read_heavy_concurrent(c: &mut Criterion) {
     
     let num_readers = 4;
     let ops_per_thread = 10_000; 
-    // 1 writer doing 1/10th of operations implies very read heavy
+    // 1 writer doing 1/100th of operations implies very read heavy
 
     // LfrLock
     group.bench_function("LfrLock", |b| {
@@ -69,7 +69,7 @@ fn read_heavy_concurrent(c: &mut Criterion) {
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                for _ in 0..(ops_per_thread/10) { 
+                for _ in 0..(ops_per_thread/100) { 
                      lock_w.update(Data(vec![0; 10]));
                 }
             }));
@@ -97,7 +97,7 @@ fn read_heavy_concurrent(c: &mut Criterion) {
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                 for _ in 0..(ops_per_thread/10) {
+                 for _ in 0..(ops_per_thread/100) {
                      lock_w.store(Arc::new(Data(vec![0; 10])));
                  }
             }));
@@ -125,7 +125,7 @@ fn read_heavy_concurrent(c: &mut Criterion) {
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                 for _ in 0..(ops_per_thread/10) {
+                 for _ in 0..(ops_per_thread/100) {
                      *lock_w.lock().unwrap() = Data(vec![0; 10]);
                  }
             }));
