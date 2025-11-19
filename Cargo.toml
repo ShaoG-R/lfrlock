@@ -1,0 +1,15 @@
+[package]
+name = "lfrlock"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+swmr-epoch = "0.3.8"
+
+[dev-dependencies]
+arc-swap = "1.7.1"
+criterion = { version = "0.7", features = ["html_reports"] }
+
+[[bench]]
+name = "lock_benchmark"
+harness = false
