@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lfrlock)](https://crates.io/crates/lfrlock)
 [![Documentation](https://docs.rs/lfrlock/badge.svg)](https://docs.rs/lfrlock)
-[![License](https://img.shields.io/crates/l/lfrlock)](LICENSE)
+[![License](https://img.shields.io/crates/l/lfrlock)](LICENSE-MIT)
 
 一个高性能的无锁读取锁实现，读取操作永不阻塞，写入操作通过 Mutex 进行串行化。
 
