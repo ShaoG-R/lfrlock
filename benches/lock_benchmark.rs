@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use lfrlock::LfrLock;
 use arc_swap::ArcSwap;
+use criterion::{Criterion, criterion_group, criterion_main};
+use lfrlock::LfrLock;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -10,13 +10,12 @@ struct Data(Vec<u32>);
 // 1. Pure Read Performance
 fn read_only_single_thread(c: &mut Criterion) {
     let mut group = c.benchmark_group("read_only_single_thread");
-    
+
     let lock = LfrLock::new(Data(vec![0; 10]));
+    // LfrLock
     group.bench_function("LfrLock", |b| {
         b.iter(|| {
-            let local_epoch = lock.register();
-            let guard = local_epoch.pin();
-            let _ = lock.read(&guard).0[0];
+            let _ = lock.read().0[0];
         })
     });
 
@@ -33,7 +32,7 @@ fn read_only_single_thread(c: &mut Criterion) {
             let _ = lock.lock().unwrap().0[0];
         })
     });
-    
+
     group.finish();
 }
 
@@ -43,9 +42,9 @@ fn read_heavy_concurrent(c: &mut Criterion) {
     let mut group = c.benchmark_group("read_heavy_concurrent");
     // Increase sample size/time if needed, but for concurrent tests keep it reasonable
     group.sample_size(10);
-    
+
     let num_readers = 4;
-    let ops_per_thread = 10_000; 
+    let ops_per_thread = 10_000;
     // 1 writer doing 1/100th of operations implies very read heavy
 
     // LfrLock
@@ -53,28 +52,28 @@ fn read_heavy_concurrent(c: &mut Criterion) {
         b.iter(|| {
             let lock = LfrLock::new(Data(vec![0; 10]));
             let mut handles = vec![];
-            
+
             // Readers
             for _ in 0..num_readers {
                 let lock = lock.clone();
                 handles.push(thread::spawn(move || {
-                    let local_epoch = lock.register();
                     for _ in 0..ops_per_thread {
-                        let guard = local_epoch.pin();
-                        let _ = lock.read(&guard).0[0];
+                        let _ = lock.read().0[0];
                     }
                 }));
             }
-            
+
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                for _ in 0..(ops_per_thread/100) { 
-                     lock_w.update(Data(vec![0; 10]));
+                for _ in 0..(ops_per_thread / 100) {
+                    lock_w.update(Data(vec![0; 10]));
                 }
             }));
 
-            for h in handles { h.join().unwrap(); }
+            for h in handles {
+                h.join().unwrap();
+            }
         })
     });
 
@@ -93,16 +92,18 @@ fn read_heavy_concurrent(c: &mut Criterion) {
                     }
                 }));
             }
-            
+
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                 for _ in 0..(ops_per_thread/100) {
-                     lock_w.store(Arc::new(Data(vec![0; 10])));
-                 }
+                for _ in 0..(ops_per_thread / 100) {
+                    lock_w.store(Arc::new(Data(vec![0; 10])));
+                }
             }));
 
-            for h in handles { h.join().unwrap(); }
+            for h in handles {
+                h.join().unwrap();
+            }
         })
     });
 
@@ -121,16 +122,18 @@ fn read_heavy_concurrent(c: &mut Criterion) {
                     }
                 }));
             }
-            
+
             // 1 Writer
             let lock_w = lock.clone();
             handles.push(thread::spawn(move || {
-                 for _ in 0..(ops_per_thread/100) {
-                     *lock_w.lock().unwrap() = Data(vec![0; 10]);
-                 }
+                for _ in 0..(ops_per_thread / 100) {
+                    *lock_w.lock().unwrap() = Data(vec![0; 10]);
+                }
             }));
 
-            for h in handles { h.join().unwrap(); }
+            for h in handles {
+                h.join().unwrap();
+            }
         })
     });
 
@@ -141,7 +144,7 @@ fn read_heavy_concurrent(c: &mut Criterion) {
 fn write_heavy_concurrent(c: &mut Criterion) {
     let mut group = c.benchmark_group("write_heavy_concurrent");
     group.sample_size(10);
-    
+
     let num_pairs = 4; // 4 readers, 4 writers
     let ops_per_thread = 1_000; // Reduce ops to keep benchmark duration sane
 
@@ -150,18 +153,16 @@ fn write_heavy_concurrent(c: &mut Criterion) {
         b.iter(|| {
             let lock = LfrLock::new(Data(vec![0; 10]));
             let mut handles = vec![];
-            
+
             for _ in 0..num_pairs {
                 // Reader
                 let lock_r = lock.clone();
                 handles.push(thread::spawn(move || {
-                    let local_epoch = lock_r.register();
                     for _ in 0..ops_per_thread {
-                        let guard = local_epoch.pin();
-                        let _ = lock_r.read(&guard).0[0];
+                        let _ = lock_r.read().0[0];
                     }
                 }));
-                
+
                 // Writer
                 let lock_w = lock.clone();
                 handles.push(thread::spawn(move || {
@@ -170,16 +171,18 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                     }
                 }));
             }
-            for h in handles { h.join().unwrap(); }
+            for h in handles {
+                h.join().unwrap();
+            }
         })
     });
 
     // ArcSwap
     group.bench_function("ArcSwap", |b| {
-         b.iter(|| {
+        b.iter(|| {
             let lock = Arc::new(ArcSwap::from_pointee(Data(vec![0; 10])));
             let mut handles = vec![];
-            
+
             for _ in 0..num_pairs {
                 // Reader
                 let lock_r = lock.clone();
@@ -188,7 +191,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                         let _ = lock_r.load().0[0];
                     }
                 }));
-                
+
                 // Writer
                 let lock_w = lock.clone();
                 handles.push(thread::spawn(move || {
@@ -197,7 +200,9 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                     }
                 }));
             }
-            for h in handles { h.join().unwrap(); }
+            for h in handles {
+                h.join().unwrap();
+            }
         })
     });
 
@@ -206,7 +211,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
         b.iter(|| {
             let lock = Arc::new(Mutex::new(Data(vec![0; 10])));
             let mut handles = vec![];
-            
+
             for _ in 0..num_pairs {
                 // Reader
                 let lock_r = lock.clone();
@@ -215,7 +220,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                         let _ = lock_r.lock().unwrap().0[0];
                     }
                 }));
-                
+
                 // Writer
                 let lock_w = lock.clone();
                 handles.push(thread::spawn(move || {
@@ -224,12 +229,19 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                     }
                 }));
             }
-            for h in handles { h.join().unwrap(); }
+            for h in handles {
+                h.join().unwrap();
+            }
         })
     });
 
     group.finish();
 }
 
-criterion_group!(benches, read_only_single_thread, read_heavy_concurrent, write_heavy_concurrent);
+criterion_group!(
+    benches,
+    read_only_single_thread,
+    read_heavy_concurrent,
+    write_heavy_concurrent
+);
 criterion_main!(benches);

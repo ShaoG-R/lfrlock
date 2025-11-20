@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 antidote = "1.0.0"
-swmr-epoch = "0.3.8"
+smr-swap = "0.5.1"
 
 [dev-dependencies]
 arc-swap = "1.7.1"

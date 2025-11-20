@@ -224,7 +224,7 @@ dependencies = [
  "antidote",
  "arc-swap",
  "criterion",
- "swmr-epoch",
+ "smr-swap",
 ]
 
 [[package]]
@@ -411,6 +411,15 @@ dependencies = [
  "ryu",
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "smr-swap"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52ca1046bb5027727d0ec8389ce0fad8168e229ce6a74a650268d5a2df859eb0"
+dependencies = [
+ "swmr-epoch",
 ]
 
 [[package]]
