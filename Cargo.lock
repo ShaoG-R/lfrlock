@@ -415,18 +415,21 @@ dependencies = [
 
 [[package]]
 name = "smr-swap"
-version = "0.5.1"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52ca1046bb5027727d0ec8389ce0fad8168e229ce6a74a650268d5a2df859eb0"
+checksum = "815d4f68749a97a1b4da29a4ca890a3ff761334bb9f5a8d0b8f3642e9b135965"
 dependencies = [
  "swmr-epoch",
 ]
 
 [[package]]
 name = "swmr-epoch"
-version = "0.3.8"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b28a66a58cf1360801e37c3b202926d2847f6bcd8b5901db0185685b27f2906e"
+checksum = "8705fe23dd4043fad7645391b17d3f8628d1fc42fb6f3eb57532d5fe0769606f"
+dependencies = [
+ "antidote",
+]
 
 [[package]]
 name = "syn"
