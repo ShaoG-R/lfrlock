@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lfrlock)](https://crates.io/crates/lfrlock)
 [![Documentation](https://docs.rs/lfrlock/badge.svg)](https://docs.rs/lfrlock)
-[![License](https://img.shields.io/crates/l/lfrlock)](LICENSE)
+[![License](https://img.shields.io/crates/l/lfrlock)](LICENSE-MIT)
 
 A high-performance Lock-Free Read Lock implementation where reads never block and writes are serialized using a Mutex.
 
