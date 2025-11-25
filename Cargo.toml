@@ -1,6 +1,6 @@
 [package]
 name = "lfrlock"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["ShaoG <shaog.rs@gmail.com>"]
 description = "A Lock-Free Read Lock where reads never block and writes are serialized using Mutex"
@@ -13,11 +13,14 @@ categories = ["concurrency", "data-structures"]
 
 [dependencies]
 antidote = "1.0.0"
-smr-swap = "0.5.3"
+smr-swap = "0.6.1"
 
 [dev-dependencies]
 arc-swap = "1.7.1"
 criterion = { version = "0.7", features = ["html_reports"] }
+
+[features]
+loom = ["smr-swap/loom"]
 
 [[bench]]
 name = "lock_benchmark"

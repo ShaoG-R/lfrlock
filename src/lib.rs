@@ -1,5 +1,5 @@
 use antidote::{Mutex, MutexGuard};
-use smr_swap::{ReaderGuard, SwapReader, Swapper};
+use smr_swap::{ReaderGuard, ReaderHandle, Swapper};
 use std::fmt;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
@@ -16,7 +16,7 @@ use std::sync::Arc;
 /// 核心特性：读取操作无锁且永不阻塞；写入操作涉及复制旧数据、修改、然后原子替换。
 pub struct LfrLock<T> {
     swapper: Arc<Mutex<Swapper<T>>>,
-    reader: SwapReader<T>,
+    handle: ReaderHandle<T>,
 }
 
 impl<T: 'static> LfrLock<T> {
@@ -29,7 +29,7 @@ impl<T: 'static> LfrLock<T> {
 
         LfrLock {
             swapper: Arc::new(Mutex::new(swapper)),
-            reader,
+            handle: reader.handle(),
         }
     }
 
@@ -56,9 +56,9 @@ impl<T: 'static> LfrLock<T> {
 
         // 1. Read old data and execute update logic
         // 1. 读取旧数据并执行更新逻辑
-        // Use reader to read current value
-        // 使用 reader 读取当前值
-        let guard = self.reader.load();
+        // Use handle to read current value
+        // 使用 handle 读取当前值
+        let guard = self.handle.load();
         let new_t = f(&*guard);
         // Explicitly release read lock
         // 显式释放读锁
@@ -96,7 +96,7 @@ impl<T: 'static> LfrLock<T> {
     {
         let swapper_guard = self.swapper.try_lock().ok()?;
 
-        let guard = self.reader.load();
+        let guard = self.handle.load();
         let data = guard.clone();
 
         Some(WriteGuard {
@@ -110,7 +110,7 @@ impl<T: 'static> LfrLock<T> {
     /// 读取数据 - 永不阻塞
     #[inline]
     pub fn read(&self) -> ReaderGuard<'_, T> {
-        self.reader.load()
+        self.handle.load()
     }
 }
 
@@ -134,7 +134,7 @@ impl<T: 'static> Clone for LfrLock<T> {
     fn clone(&self) -> Self {
         Self {
             swapper: self.swapper.clone(),
-            reader: self.reader.fork(),
+            handle: self.handle.clone(),
         }
     }
 }
@@ -155,7 +155,7 @@ impl<'a, T: 'static + Clone> WriteGuard<'a, T> {
         // 获取 Mutex 锁
         let swapper_guard = lock.swapper.lock();
 
-        let guard = lock.reader.load();
+        let guard = lock.handle.load();
         let data = guard.clone();
 
         WriteGuard {
