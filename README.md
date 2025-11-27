@@ -96,22 +96,22 @@ Benchmark results comparing `LfrLock` against `ArcSwap` and `std::sync::Mutex` o
 
 | Scenario | LfrLock | ArcSwap | Mutex | Notes |
 |----------|---------|---------|-------|-------|
-| **Read Only (Single Thread)** | **0.74 ns** | 8.77 ns | 8.35 ns | **~11.8x faster** |
-| **Read Heavy (Concurrent)** (1:1000) | **171 µs** | 218 µs | 1.87 ms | **~10.9x faster** than Mutex |
-| **Read Heavy (Concurrent)** (1:100) | **168 µs** | 253 µs | 1.84 ms | **~1.5x faster** than ArcSwap |
-| **Read Heavy (Concurrent)** (1:10) | **225 µs** | 593 µs | 2.10 ms | **~2.6x faster** than ArcSwap |
-| **Write Heavy (Concurrent)** (16R:4W) | 1.26 ms | 3.19 ms | **1.20 ms** | Mutex slightly faster |
-| **Write Heavy (Concurrent)** (8R:4W) | 1.10 ms | 3.11 ms | **0.90 ms** | Mutex ~20% faster |
-| **Write Heavy (Concurrent)** (4R:4W) | 1.01 ms | 2.98 ms | **0.79 ms** | Mutex ~27% faster |
-| **Creation (new)** | 231 ns | 912 ns | **0.19 ns** | Mutex is instant |
-| **Cloning** | 96 ns | **8.7 ns** | **8.7 ns** | LfrLock clone is heavier |
+| **Read Only (Single Thread)** | **0.75 ns** | 9.33 ns | 8.48 ns | **~12.4x faster** |
+| **Read Heavy (Concurrent)** (1:1000) | **180 µs** | 236 µs | 1.89 ms | **~10.5x faster** than Mutex |
+| **Read Heavy (Concurrent)** (1:100) | **179 µs** | 267 µs | 1.94 ms | **~1.5x faster** than ArcSwap |
+| **Read Heavy (Concurrent)** (1:10) | **220 µs** | 574 µs | 2.08 ms | **~2.6x faster** than ArcSwap |
+| **Write Heavy (Concurrent)** (16R:4W) | 1.31 ms | 3.20 ms | **1.27 ms** | Mutex slightly faster |
+| **Write Heavy (Concurrent)** (8R:4W) | 1.14 ms | 3.05 ms | **0.94 ms** | Mutex ~18% faster |
+| **Write Heavy (Concurrent)** (4R:4W) | 1.15 ms | 2.96 ms | **0.76 ms** | Mutex ~34% faster |
+| **Creation (new)** | 282 ns | 909 ns | **0.19 ns** | Mutex is instant |
+| **Cloning** | 94 ns | **8.75 ns** | **8.80 ns** | LfrLock clone is heavier |
 
 ### Analysis
 
-- **Read Performance**: `LfrLock` provides wait-free reads with nanosecond-scale latency (0.74ns), significantly outperforming `ArcSwap` and `Mutex` (~8ns).
-- **High Contention Reads**: In mixed workloads (1:1000 to 1:10 write ratio), `LfrLock` maintains stable performance (~170-225µs), while `ArcSwap` degrades significantly at higher write rates (up to ~600µs).
-- **Write Heavy**: `Mutex` is slightly faster (~20%) in pure write-heavy scenarios because `LfrLock` involves RCU-like operations. `ArcSwap` is significantly slower.
-- **Overhead**: `LfrLock` has higher cloning overhead (~98ns) compared to `Arc` cloning (~9ns) because it registers a new epoch reader. However, it is ~4x faster to create than `ArcSwap`.
+- **Read Performance**: `LfrLock` provides wait-free reads with nanosecond-scale latency (0.75ns), significantly outperforming `ArcSwap` and `Mutex` (~9ns).
+- **High Contention Reads**: In mixed workloads (1:1000 to 1:10 write ratio), `LfrLock` maintains stable performance (~180-220µs), while `ArcSwap` degrades significantly at higher write rates (up to ~574µs).
+- **Write Heavy**: `Mutex` is faster (~18-34%) in pure write-heavy scenarios because `LfrLock` involves RCU-like operations. `ArcSwap` is significantly slower.
+- **Overhead**: `LfrLock` has higher cloning overhead (~94ns) compared to `Arc` cloning (~9ns) because it registers a new epoch reader. However, it is ~3.2x faster to create than `ArcSwap`.
 
 ## License
 
