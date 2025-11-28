@@ -73,7 +73,7 @@ fn read_heavy_concurrent(c: &mut Criterion) {
                     let lock_w = lock.clone();
                     handles.push(thread::spawn(move || {
                         for _ in 0..num_writes {
-                            lock_w.update(Data(vec![0; 10]));
+                            lock_w.store(Data(vec![0; 10]));
                         }
                     }));
 
@@ -192,7 +192,7 @@ fn write_heavy_concurrent(c: &mut Criterion) {
                         let lock_w = lock.clone();
                         handles.push(thread::spawn(move || {
                             for _ in 0..ops_per_thread {
-                                lock_w.update(Data(vec![0; 10]));
+                                lock_w.store(Data(vec![0; 10]));
                             }
                         }));
                     }

@@ -18,7 +18,7 @@ fn test_multiple_writers() {
         let lock_clone = lock.clone();
         let handle = thread::spawn(move || {
             for _ in 0..25 {
-                lock_clone.write_with(|old_data| Data {
+                lock_clone.update(|old_data| Data {
                     value: old_data.value + 1,
                 });
             }
@@ -51,7 +51,7 @@ fn test_multiple_readers_and_writers() {
         let lock_clone = lock.clone();
         let handle = thread::spawn(move || {
             for _ in 0..50 {
-                lock_clone.write_with(|old_data| Data {
+                lock_clone.update(|old_data| Data {
                     value: old_data.value + 1,
                 });
             }

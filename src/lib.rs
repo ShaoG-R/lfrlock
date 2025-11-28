@@ -34,40 +34,126 @@ impl<T: 'static> LfrLock<T> {
         }
     }
 
-    /// Update data - direct replacement
+    /// Store a new value, making it visible to readers.
     ///
-    /// 更新数据 - 直接替换
+    /// The old value is retired and will be garbage collected when safe.
+    ///
+    /// 存储新值，使其对读者可见。
+    ///
+    /// 旧值已退休，将在安全时被垃圾回收。
     #[inline]
-    pub fn update(&self, new_t: T) {
+    pub fn store(&self, new_value: T) {
         let mut swap = self.swap.lock();
-        swap.update(new_t);
+        swap.store(new_value);
     }
 
-    /// Write operation (closure style)
+    /// Atomically swap the current value with a new one.
     ///
-    /// 写入操作（闭包方式）
+    /// Returns the old value.
+    ///
+    /// 原子地将当前值与新值交换。
+    ///
+    /// 返回旧的值。
     #[inline]
-    pub fn write_with<F>(&self, f: F)
+    pub fn swap(&self, new_value: T) -> T
+    where
+        T: Clone,
+    {
+        self.swap.lock().swap(new_value)
+    }
+
+    /// Update the value using a closure.
+    ///
+    /// The closure receives the current value and should return the new value.
+    ///
+    /// 使用闭包更新值。
+    ///
+    /// 闭包接收当前值并应返回新值。
+    #[inline]
+    pub fn update<F>(&self, f: F)
     where
         F: FnOnce(&T) -> T,
     {
-        // Acquire Mutex lock to ensure only one writer writes at a time
-        // 获取 Mutex 锁，确保同一时间只有一个写者在写入
-        let mut swap = self.swap.lock();
+        self.swap.lock().update(f);
+    }
 
-        // 1. Read old data and execute update logic
-        // 1. 读取旧数据并执行更新逻辑
-        // Use local reader to read current value
-        // 使用 local reader 读取当前值
+    /// Apply a closure function to the current value and return a guard to the new value.
+    ///
+    /// The closure receives a reference to the current value and returns a new value.
+    ///
+    /// 对当前值应用闭包函数并返回新值的守卫。
+    ///
+    /// 闭包接收当前值的引用，返回新值。
+    #[inline]
+    pub fn update_and_fetch<F>(&self, f: F) -> ReadGuard<'_, T>
+    where
+        F: FnOnce(&T) -> T,
+    {
+        self.swap.lock().update(f);
+        self.local.load()
+    }
+
+    /// Apply a closure function to the current value and return a guard to the old value.
+    ///
+    /// The closure receives the current value and should return the new value.
+    /// Returns a guard to the old value (before update).
+    ///
+    /// 对当前值应用闭包函数并返回旧值的守卫。
+    ///
+    /// 闭包接收当前值并应返回新值。
+    /// 返回旧值（更新前）的守卫。
+    #[inline]
+    pub fn fetch_and_update<F>(&self, f: F) -> ReadGuard<'_, T>
+    where
+        F: FnOnce(&T) -> T,
+    {
+        let old_guard = self.local.load();
+        self.swap.lock().update(f);
+        old_guard
+    }
+
+    /// Apply a closure function to the current value and transform the result.
+    ///
+    /// This method reads the current value, applies the closure to transform it,
+    /// and returns the transformed result.
+    ///
+    /// 对当前值应用闭包函数并转换结果。
+    ///
+    /// 这个方法读取当前值，应用闭包进行转换，并返回转换后的结果。
+    #[inline]
+    pub fn map<F, U>(&self, f: F) -> U
+    where
+        F: FnOnce(&T) -> U,
+    {
         let guard = self.local.load();
-        let new_t = f(&*guard);
-        // Explicitly release read lock
-        // 显式释放读锁
-        drop(guard);
+        f(&*guard)
+    }
 
-        // 2. Swap in the new "T" state
-        // 2. 换入新的 "T" 状态
-        swap.update(new_t);
+    /// Apply a closure function to the current value, returning Some if the closure returns true.
+    ///
+    /// 对当前值应用闭包函数，如果闭包返回 true 则返回 Some。
+    #[inline]
+    pub fn filter<F>(&self, f: F) -> Option<ReadGuard<'_, T>>
+    where
+        F: FnOnce(&T) -> bool,
+    {
+        let guard = self.local.load();
+        if f(&*guard) {
+            Some(guard)
+        } else {
+            None
+        }
+    }
+
+    /// Get the current value by cloning.
+    ///
+    /// 通过克隆获取当前值。
+    #[inline]
+    pub fn get(&self) -> T
+    where
+        T: Clone,
+    {
+        (&*self.local.load()).clone()
     }
 
     /// Write operation (Guard style) - Requires T to implement Clone
@@ -116,9 +202,22 @@ impl<T: 'static> LfrLock<T> {
 }
 
 impl<T: Default + 'static> Default for LfrLock<T> {
+    /// Create a new LfrLock with the default value.
+    ///
+    /// 使用默认值创建一个新的 LfrLock。
     #[inline]
     fn default() -> Self {
         Self::new(T::default())
+    }
+}
+
+impl<T: 'static> From<T> for LfrLock<T> {
+    /// Create a new LfrLock from a value.
+    ///
+    /// 从一个值创建一个新的 LfrLock。
+    #[inline]
+    fn from(value: T) -> Self {
+        Self::new(value)
     }
 }
 
@@ -191,7 +290,7 @@ impl<'a, T: 'static> Drop for WriteGuard<'a, T> {
 
         // Execute state swap
         // 执行状态切换
-        self.swap_guard.update(new_data);
+        self.swap_guard.store(new_data);
     }
 }
 

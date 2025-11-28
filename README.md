@@ -26,7 +26,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-lfrlock = "0.1"
+lfrlock = "0.2"
 ```
 
 ### Basic Usage
@@ -70,11 +70,27 @@ fn main() {
 
 The main type combining reader and writer capabilities.
 
+#### Creation
+
 - **`new(initial: T)`**: Creates a new lock with an initial value.
-- **`read() -> ReaderGuard<T>`**: Gets a lock-free read guard. Never blocks.
-- **`write() -> WriteGuard<T>`**: Acquires a write lock (blocks other writers) and returns a guard for mutable access. Requires `T: Clone`.
-- **`write_with(f: F)`**: Updates data using a closure `FnOnce(&T) -> T`. Useful when `T` is not `Clone` or for functional updates.
-- **`update(new_t: T)`**: Directly replaces the current value.
+- **`From<T>`**: Supports `LfrLock::from(value)` or `value.into()`.
+- **`Default`**: When `T: Default`, supports `LfrLock::default()`.
+
+#### Read Operations
+
+- **`read() -> ReadGuard<T>`**: Gets a lock-free read guard. Never blocks.
+- **`get() -> T`**: Clones and returns the current value. Requires `T: Clone`.
+- **`map<F, U>(f: F) -> U`**: Applies a closure to the current value and returns the transformed result.
+- **`filter<F>(f: F) -> Option<ReadGuard<T>>`**: Conditional read, returns `Some(guard)` if closure returns `true`.
+
+#### Write Operations
+
+- **`store(new_value: T)`**: Directly replaces the current value.
+- **`swap(new_value: T) -> T`**: Atomically swaps and returns the old value. Requires `T: Clone`.
+- **`update<F>(f: F)`**: Updates data using a closure `FnOnce(&T) -> T`.
+- **`update_and_fetch<F>(f: F) -> ReadGuard<T>`**: Updates and returns a guard to the new value.
+- **`fetch_and_update<F>(f: F) -> ReadGuard<T>`**: Returns a guard to the old value and updates.
+- **`write() -> WriteGuard<T>`**: Acquires a write lock and returns a guard for mutable access. Requires `T: Clone`.
 - **`try_write() -> Option<WriteGuard<T>>`**: Tries to acquire the write lock.
 
 ### `WriteGuard<T>`
@@ -115,4 +131,10 @@ Benchmark results comparing `LfrLock` against `ArcSwap` and `std::sync::Mutex` o
 
 ## License
 
-Licensed under either of Apache License, Version 2.0 or MIT license at your option.
+This project is licensed under either of
+
+ * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
+

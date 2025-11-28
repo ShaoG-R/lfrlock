@@ -26,7 +26,7 @@
 
 ```toml
 [dependencies]
-lfrlock = "0.1"
+lfrlock = "0.2"
 ```
 
 ### 基本用法
@@ -70,11 +70,27 @@ fn main() {
 
 结合了读取者和写入者功能的主类型。
 
+#### 创建
+
 - **`new(initial: T)`**: 创建一个带有初始值的新锁。
-- **`read() -> ReaderGuard<T>`**: 获取无锁读取守卫。永不阻塞。
-- **`write() -> WriteGuard<T>`**: 获取写入锁（阻塞其他写入者）并返回用于可变访问的守卫。需要 `T: Clone`。
-- **`write_with(f: F)`**: 使用闭包 `FnOnce(&T) -> T` 更新数据。当 `T` 未实现 `Clone` 或进行函数式更新时很有用。
-- **`update(new_t: T)`**: 直接替换当前值。
+- **`From<T>`**: 支持 `LfrLock::from(value)` 或 `value.into()`。
+- **`Default`**: 当 `T: Default` 时，支持 `LfrLock::default()`。
+
+#### 读取操作
+
+- **`read() -> ReadGuard<T>`**: 获取无锁读取守卫。永不阻塞。
+- **`get() -> T`**: 克隆并返回当前值。需要 `T: Clone`。
+- **`map<F, U>(f: F) -> U`**: 对当前值应用闭包并返回转换结果。
+- **`filter<F>(f: F) -> Option<ReadGuard<T>>`**: 条件读取，闭包返回 `true` 时返回 `Some(guard)`。
+
+#### 写入操作
+
+- **`store(new_value: T)`**: 直接替换当前值。
+- **`swap(new_value: T) -> T`**: 原子交换并返回旧值。需要 `T: Clone`。
+- **`update<F>(f: F)`**: 使用闭包 `FnOnce(&T) -> T` 更新数据。
+- **`update_and_fetch<F>(f: F) -> ReadGuard<T>`**: 更新并返回新值的守卫。
+- **`fetch_and_update<F>(f: F) -> ReadGuard<T>`**: 返回旧值的守卫并更新。
+- **`write() -> WriteGuard<T>`**: 获取写入锁并返回可变访问的守卫。需要 `T: Clone`。
 - **`try_write() -> Option<WriteGuard<T>>`**: 尝试获取写入锁。
 
 ### `WriteGuard<T>`
@@ -115,4 +131,9 @@ fn main() {
 
 ## 许可证
 
-根据您的选择，根据 Apache License, Version 2.0 或 MIT 许可证进行许可。
+本项目采用以下任一许可证授权：
+
+ * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+由你选择。
