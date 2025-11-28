@@ -103,8 +103,8 @@ Benchmark results comparing `LfrLock` against `ArcSwap` and `std::sync::Mutex` o
 | **Write Heavy (Concurrent)** (16R:4W) | 1.31 ms | 3.20 ms | **1.27 ms** | Mutex slightly faster |
 | **Write Heavy (Concurrent)** (8R:4W) | 1.14 ms | 3.05 ms | **0.94 ms** | Mutex ~18% faster |
 | **Write Heavy (Concurrent)** (4R:4W) | 1.15 ms | 2.96 ms | **0.76 ms** | Mutex ~34% faster |
-| **Creation (new)** | 282 ns | 909 ns | **0.19 ns** | Mutex is instant |
-| **Cloning** | 94 ns | **8.75 ns** | **8.80 ns** | LfrLock clone is heavier |
+| **Creation (new)** | 236 ns | 909 ns | **0.19 ns** | Mutex is instant |
+| **Cloning** | 80 ns | **8.75 ns** | **8.80 ns** | LfrLock clone is heavier |
 
 ### Analysis
 
