@@ -1,5 +1,5 @@
 use antidote::{Mutex, MutexGuard};
-use smr_swap::{LocalReader, ReadGuard, SmrSwap};
+use smr_swap::{LocalReader, ReadGuard, SmrReader, SmrSwap};
 use std::fmt;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
@@ -138,11 +138,7 @@ impl<T: 'static> LfrLock<T> {
         F: FnOnce(&T) -> bool,
     {
         let guard = self.local.load();
-        if f(&*guard) {
-            Some(guard)
-        } else {
-            None
-        }
+        if f(&*guard) { Some(guard) } else { None }
     }
 
     /// Get the current value by cloning.
@@ -294,3 +290,52 @@ impl<'a, T: 'static> Drop for WriteGuard<'a, T> {
     }
 }
 
+/// Factory for creating `LfrLock` instances.
+///
+/// This factory is `Sync` + `Clone` and can be shared across threads.
+/// It allows creating new `LfrLock` instances for the current thread.
+///
+/// 用于创建 `LfrLock` 实例的工厂。
+///
+/// 该工厂是 `Sync` + `Clone` 的，可以在线程之间共享。
+/// 它允许为当前线程创建新的 `LfrLock` 实例。
+pub struct LfrLockFactory<T: 'static> {
+    swap: Arc<Mutex<SmrSwap<T>>>,
+    reader: SmrReader<T>,
+}
+
+impl<T: 'static> LfrLockFactory<T> {
+    /// Create a new factory with the initial value.
+    ///
+    /// 使用初始值创建一个新工厂。
+    #[inline]
+    pub fn new(initial: T) -> Self {
+        let swap = SmrSwap::new(initial);
+        let reader = swap.reader();
+        Self {
+            swap: Arc::new(Mutex::new(swap)),
+            reader,
+        }
+    }
+
+    /// Create a new lock instance for the current thread.
+    ///
+    /// 为当前线程创建一个新的锁实例。
+    #[inline]
+    pub fn create(&self) -> LfrLock<T> {
+        LfrLock {
+            swap: self.swap.clone(),
+            local: self.reader.local(),
+        }
+    }
+}
+
+impl<T: 'static> Clone for LfrLockFactory<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            swap: self.swap.clone(),
+            reader: self.reader.clone(),
+        }
+    }
+}

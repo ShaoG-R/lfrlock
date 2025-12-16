@@ -64,6 +64,38 @@ fn main() {
 }
 ```
 
+### Shared Access (Multi-threaded)
+
+Since `LfrLock` is not `Sync` (it contains a thread-local reader), it cannot be shared via `Arc<LfrLock>`. Instead, use `LfrLockFactory`, which is `Sync` and `Clone`.
+
+```rust
+use lfrlock::LfrLockFactory;
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    // Create a factory (Sync + Clone)
+    let factory = LfrLockFactory::new(0);
+    let factory = Arc::new(factory);
+
+    let mut handles = vec![];
+
+    for i in 0..4 {
+        let factory = factory.clone();
+        handles.push(thread::spawn(move || {
+            // Create a thread-local lock instance
+            let lock = factory.create();
+            let val = lock.read();
+            println!("Thread {} sees: {}", i, *val);
+        }));
+    }
+
+    for h in handles {
+        h.join().unwrap();
+    }
+}
+```
+
 ## API Overview
 
 ### `LfrLock<T>`
@@ -92,6 +124,13 @@ The main type combining reader and writer capabilities.
 - **`fetch_and_update<F>(f: F) -> ReadGuard<T>`**: Returns a guard to the old value and updates.
 - **`write() -> WriteGuard<T>`**: Acquires a write lock and returns a guard for mutable access. Requires `T: Clone`.
 - **`try_write() -> Option<WriteGuard<T>>`**: Tries to acquire the write lock.
+
+### `LfrLockFactory<T>`
+
+A factory for creating `LfrLock` instances. `Sync` and `Clone`, suitable for sharing across threads.
+
+- **`new(initial: T)`**: Creates a new factory with an initial value.
+- **`create() -> LfrLock<T>`**: Creates a new `LfrLock` handle for the current thread.
 
 ### `WriteGuard<T>`
 

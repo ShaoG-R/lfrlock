@@ -64,6 +64,38 @@ fn main() {
 }
 ```
 
+### 共享访问 (多线程)
+
+由于 `LfrLock` 不是 `Sync` 的（它包含线程本地读取者），因此无法通过 `Arc<LfrLock>` 共享。请使用 `LfrLockFactory`，它是 `Sync` 和 `Clone` 的。
+
+```rust
+use lfrlock::LfrLockFactory;
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    // 创建一个工厂 (Sync + Clone)
+    let factory = LfrLockFactory::new(0);
+    let factory = Arc::new(factory);
+
+    let mut handles = vec![];
+
+    for i in 0..4 {
+        let factory = factory.clone();
+        handles.push(thread::spawn(move || {
+            // 创建线程本地的锁实例
+            let lock = factory.create();
+            let val = lock.read();
+            println!("Thread {} sees: {}", i, *val);
+        }));
+    }
+
+    for h in handles {
+        h.join().unwrap();
+    }
+}
+```
+
 ## API 概览
 
 ### `LfrLock<T>`
@@ -92,6 +124,13 @@ fn main() {
 - **`fetch_and_update<F>(f: F) -> ReadGuard<T>`**: 返回旧值的守卫并更新。
 - **`write() -> WriteGuard<T>`**: 获取写入锁并返回可变访问的守卫。需要 `T: Clone`。
 - **`try_write() -> Option<WriteGuard<T>>`**: 尝试获取写入锁。
+
+### `LfrLockFactory<T>`
+
+用于创建 `LfrLock` 实例的工厂。`Sync` 且 `Clone`，适合跨线程共享。
+
+- **`new(initial: T)`**: 创建一个带有初始值的新工厂。
+- **`create() -> LfrLock<T>`**: 为当前线程创建一个新的 `LfrLock` 句柄。
 
 ### `WriteGuard<T>`
 
