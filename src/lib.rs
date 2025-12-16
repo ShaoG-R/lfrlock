@@ -195,6 +195,21 @@ impl<T: 'static> LfrLock<T> {
     pub fn read(&self) -> ReadGuard<'_, T> {
         self.local.load()
     }
+
+    /// Create a factory for creating new `LfrLock` instances.
+    ///
+    /// The returned factory is `Sync` + `Clone` and can be shared across threads.
+    ///
+    /// 创建用于创建新 `LfrLock` 实例的工厂。
+    ///
+    /// 返回的工厂是 `Sync` + `Clone` 的，可以在线程之间共享。
+    #[inline]
+    pub fn factory(&self) -> LfrLockFactory<T> {
+        LfrLockFactory {
+            swap: self.swap.clone(),
+            reader: self.local.share(),
+        }
+    }
 }
 
 impl<T: Default + 'static> Default for LfrLock<T> {

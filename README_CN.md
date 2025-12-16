@@ -66,16 +66,19 @@ fn main() {
 
 ### 共享访问 (多线程)
 
-由于 `LfrLock` 不是 `Sync` 的（它包含线程本地读取者），因此无法通过 `Arc<LfrLock>` 共享。请使用 `LfrLockFactory`，它是 `Sync` 和 `Clone` 的。
+由于 `LfrLock` 不是 `Sync` 的（它包含线程本地读取者），因此无法通过 `Arc<LfrLock>` 共享。请从锁实例获取 `LfrLockFactory`（或直接创建一个），它是 `Sync` 和 `Clone` 的。
 
 ```rust
-use lfrlock::LfrLockFactory;
+use lfrlock::LfrLock;
 use std::sync::Arc;
 use std::thread;
 
 fn main() {
-    // 创建一个工厂 (Sync + Clone)
-    let factory = LfrLockFactory::new(0);
+    // 在主线程创建锁
+    let lock = LfrLock::new(0);
+    
+    // 创建用于共享的工厂 (Sync + Clone)
+    let factory = lock.factory();
     let factory = Arc::new(factory);
 
     let mut handles = vec![];
@@ -89,6 +92,9 @@ fn main() {
             println!("Thread {} sees: {}", i, *val);
         }));
     }
+
+    // 主线程仍然可以使用 'lock'
+    lock.store(1);
 
     for h in handles {
         h.join().unwrap();
@@ -114,6 +120,7 @@ fn main() {
 - **`get() -> T`**: 克隆并返回当前值。需要 `T: Clone`。
 - **`map<F, U>(f: F) -> U`**: 对当前值应用闭包并返回转换结果。
 - **`filter<F>(f: F) -> Option<ReadGuard<T>>`**: 条件读取，闭包返回 `true` 时返回 `Some(guard)`。
+- **`factory() -> LfrLockFactory<T>`**: 创建一个在线程间共享锁的工厂。
 
 #### 写入操作
 

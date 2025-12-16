@@ -66,16 +66,19 @@ fn main() {
 
 ### Shared Access (Multi-threaded)
 
-Since `LfrLock` is not `Sync` (it contains a thread-local reader), it cannot be shared via `Arc<LfrLock>`. Instead, use `LfrLockFactory`, which is `Sync` and `Clone`.
+Since `LfrLock` is not `Sync` (it contains a thread-local reader), it cannot be shared via `Arc<LfrLock>`. Instead, obtain a `LfrLockFactory` from the lock (or create one directly), which is `Sync` and `Clone`.
 
 ```rust
-use lfrlock::LfrLockFactory;
+use lfrlock::LfrLock;
 use std::sync::Arc;
 use std::thread;
 
 fn main() {
-    // Create a factory (Sync + Clone)
-    let factory = LfrLockFactory::new(0);
+    // Create a lock in the main thread
+    let lock = LfrLock::new(0);
+    
+    // Create a factory for sharing (Sync + Clone)
+    let factory = lock.factory();
     let factory = Arc::new(factory);
 
     let mut handles = vec![];
@@ -89,6 +92,9 @@ fn main() {
             println!("Thread {} sees: {}", i, *val);
         }));
     }
+
+    // Main thread can still use 'lock'
+    lock.store(1);
 
     for h in handles {
         h.join().unwrap();
@@ -114,6 +120,7 @@ The main type combining reader and writer capabilities.
 - **`get() -> T`**: Clones and returns the current value. Requires `T: Clone`.
 - **`map<F, U>(f: F) -> U`**: Applies a closure to the current value and returns the transformed result.
 - **`filter<F>(f: F) -> Option<ReadGuard<T>>`**: Conditional read, returns `Some(guard)` if closure returns `true`.
+- **`factory() -> LfrLockFactory<T>`**: Creates a factory for sharing the lock across threads.
 
 #### Write Operations
 
