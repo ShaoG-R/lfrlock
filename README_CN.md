@@ -18,6 +18,21 @@
 - **使用简便**: 提供 `WriteGuard` 用于习惯的可变访问，在 drop 时自动提交更改。
 - **安全并发**: 基于 `smr-swap` 构建，确保安全的内存回收和并发访问。
 
+## No-std 支持
+
+`lfrlock` 支持 `no_std` 环境。要在 `no_std` crate 中使用它：
+
+1.  禁用默认特性。
+2.  如果需要 Mutex 支持（`LfrLock` 用于写入），请启用 `spin` 特性。
+3.  确保 `alloc` 可用。
+
+```toml
+[dependencies]
+lfrlock = { version = "0.2", default-features = false, features = ["spin"] }
+```
+
+注意：`LfrLock` 依赖 Mutex 来串行化写入。在 `std` 环境中，它使用 `std::sync::Mutex`。在启用了 `spin` 特性的 `no_std` 环境中，它使用 `spin::Mutex`。
+
 ## 快速开始
 
 ### 安装

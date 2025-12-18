@@ -18,6 +18,21 @@ A high-performance Lock-Free Read Lock implementation where reads never block an
 - **Easy Usage**: Provides a `WriteGuard` for familiar, mutable access that automatically commits changes on drop.
 - **Safe Concurrency**: Built on top of `smr-swap` for safe memory reclamation and concurrent access.
 
+## No-std Support
+
+`lfrlock` supports `no_std` environments. To use it in a `no_std` crate:
+
+1.  Disable default features.
+2.  Enable the `spin` feature if you need Mutex support (which `LfrLock` uses for writes).
+3.  Ensure `alloc` is available.
+
+```toml
+[dependencies]
+lfrlock = { version = "0.2", default-features = false, features = ["spin"] }
+```
+
+Note: `LfrLock` relies on a Mutex for serializing writes. In `std` environments, it uses `std::sync::Mutex`. In `no_std` environments with the `spin` feature enabled, it uses `spin::Mutex`.
+
 ## Quick Start
 
 ### Installation

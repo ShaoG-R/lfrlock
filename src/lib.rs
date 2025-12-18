@@ -1,9 +1,18 @@
-use antidote::{Mutex, MutexGuard};
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+use core::fmt;
+use core::mem::ManuallyDrop;
+use core::ops::{Deref, DerefMut};
 use smr_swap::{LocalReader, ReadGuard, SmrReader, SmrSwap};
-use std::fmt;
-use std::mem::ManuallyDrop;
-use std::ops::{Deref, DerefMut};
+
+#[cfg(feature = "std")]
 use std::sync::Arc;
+
+#[cfg(not(feature = "std"))]
+use alloc::sync::Arc;
 
 /// LfrLock (Lock-Free Read Lock) - Reads never block, writes are serialized using Mutex
 ///
@@ -354,3 +363,120 @@ impl<T: 'static> Clone for LfrLockFactory<T> {
         }
     }
 }
+
+#[cfg(feature = "std")]
+mod lock_impl {
+    use std::ops::{Deref, DerefMut};
+
+    /// Like `std::sync::Mutex` except that it does not poison itself.
+    pub struct Mutex<T: ?Sized>(std::sync::Mutex<T>);
+
+    impl<T> Mutex<T> {
+        /// Like `std::sync::Mutex::new`.
+        #[inline]
+        pub fn new(t: T) -> Mutex<T> {
+            Mutex(std::sync::Mutex::new(t))
+        }
+    }
+
+    impl<T: ?Sized> Mutex<T> {
+        /// Like `std::sync::Mutex::lock`.
+        #[inline]
+        pub fn lock<'a>(&'a self) -> MutexGuard<'a, T> {
+            MutexGuard(self.0.lock().unwrap_or_else(|e| e.into_inner()))
+        }
+
+        /// Like `std::sync::Mutex::try_lock`.
+        #[inline]
+        pub fn try_lock<'a>(&'a self) -> TryLockResult<MutexGuard<'a, T>> {
+            match self.0.try_lock() {
+                Ok(t) => Ok(MutexGuard(t)),
+                Err(std::sync::TryLockError::Poisoned(e)) => Ok(MutexGuard(e.into_inner())),
+                Err(std::sync::TryLockError::WouldBlock) => Err(TryLockError(())),
+            }
+        }
+    }
+
+    /// Like `std::sync::MutexGuard`.
+    #[must_use]
+    pub struct MutexGuard<'a, T: ?Sized + 'a>(std::sync::MutexGuard<'a, T>);
+
+    impl<'a, T: ?Sized> Deref for MutexGuard<'a, T> {
+        type Target = T;
+
+        #[inline]
+        fn deref(&self) -> &T {
+            self.0.deref()
+        }
+    }
+
+    impl<'a, T: ?Sized> DerefMut for MutexGuard<'a, T> {
+        #[inline]
+        fn deref_mut(&mut self) -> &mut T {
+            self.0.deref_mut()
+        }
+    }
+
+    /// Like `std::sync::TryLockResult`.
+    pub type TryLockResult<T> = Result<T, TryLockError>;
+
+    /// Like `std::sync::TryLockError`.
+    #[derive(Debug)]
+    pub struct TryLockError(());
+}
+
+#[cfg(not(feature = "std"))]
+mod lock_impl {
+    use core::ops::{Deref, DerefMut};
+
+    /// `spin::Mutex` wrapper to match `std::sync::Mutex` API.
+    pub struct Mutex<T: ?Sized>(spin::Mutex<T>);
+
+    impl<T> Mutex<T> {
+        #[inline]
+        pub fn new(t: T) -> Mutex<T> {
+            Mutex(spin::Mutex::new(t))
+        }
+    }
+
+    impl<T: ?Sized> Mutex<T> {
+        #[inline]
+        pub fn lock(&self) -> MutexGuard<'_, T> {
+            MutexGuard(self.0.lock())
+        }
+
+        #[inline]
+        pub fn try_lock(&self) -> TryLockResult<MutexGuard<'_, T>> {
+            match self.0.try_lock() {
+                Some(guard) => Ok(MutexGuard(guard)),
+                None => Err(TryLockError(())),
+            }
+        }
+    }
+
+    #[must_use]
+    pub struct MutexGuard<'a, T: ?Sized + 'a>(spin::MutexGuard<'a, T>);
+
+    impl<'a, T: ?Sized> Deref for MutexGuard<'a, T> {
+        type Target = T;
+
+        #[inline]
+        fn deref(&self) -> &T {
+            &*self.0
+        }
+    }
+
+    impl<'a, T: ?Sized> DerefMut for MutexGuard<'a, T> {
+        #[inline]
+        fn deref_mut(&mut self) -> &mut T {
+            &mut *self.0
+        }
+    }
+
+    pub type TryLockResult<T> = Result<T, TryLockError>;
+
+    #[derive(Debug)]
+    pub struct TryLockError(());
+}
+
+use lock_impl::*;
